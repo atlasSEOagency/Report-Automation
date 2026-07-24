@@ -4,7 +4,7 @@ import gspread as gs
 import re
 import json
 
-GCREDS = os.environ.get("gcreds")
+GCREDS = os.environ.get("GCREDS")
 if GCREDS == None:
     gc = gs.service_account('.env/sound-repeater-373205-94c780c6a3b8.json')
 else:
