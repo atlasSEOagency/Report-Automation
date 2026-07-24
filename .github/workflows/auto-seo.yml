@@ -30,5 +30,5 @@ jobs:
       - name: Run Auto-SEO Script
         env:
          
-          gcreds: ${{ secrets.gcreds }}
+          GCREDS: ${{ secrets.GCREDS }}
         run: python main.py
