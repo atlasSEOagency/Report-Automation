@@ -2,9 +2,9 @@ name: Auto-SEO Monthly Report
 
 on:
   schedule:
-    # Runs at 00:00 on the 30th of every month
+   
     - cron: '0 0 30 * *'
-  # Allows you to run this workflow manually from the Actions tab
+ 
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+
           cache: 'pip'
 
       - name: Install dependencies
@@ -28,6 +29,6 @@ jobs:
 
       - name: Run Auto-SEO Script
         env:
-          # This maps the GitHub Secret to the environment variable we check in Python
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+         
+          gcreds: ${{ secrets.gcreds }}
         run: python main.py
