@@ -13,24 +13,26 @@ if GCREDS == None:
 else:
     gc = gs.service_account_from_dict(json.loads(GCREDS))
 
-sh = gc.open("RAPTOR DYNAMIC  Offpage Worksheet")
-write_sh = gc.open("Raptor report -Draft")
 
+sh = gc.open("RAPTOR DYNAMIC  Offpage Worksheet")
+of_sh=gc.open('Offpage-links report')
+write_sh = gc.open("Raptor report-Draft")
 
 
 
 
     
-def counter (sheet_name):
+def counter(sheet_name):
 
     wks = sh.worksheet(sheet_name)
     raw_data = wks.get_all_values()
     df = pd.DataFrame(raw_data)
 
     now = date.today()
+    month_name = now.strftime('%B')
     month_row = None
     for x,val in enumerate(df[0]): 
-        if re.search(rf"{now.month}[./]{now.year}\b",str(val),re.IGNORECASE):
+        if re.search(rf"0?{now.month}[./]{now.year}\b|{month_name}",str(val),re.IGNORECASE):
             month_row = x+1
             break         
     month_data =df[6].iloc[month_row :]
@@ -38,11 +40,12 @@ def counter (sheet_name):
     
 
     if month_row is None:
-        return 0
-    return total_url
+        raise ValueError("No match")
+
+    return total_url,month_row
 
 
-def write(sheet_name,counts):
+def write_counter(sheet_name,counts):
     now = date.today()
     write_wks = write_sh.worksheet(sheet_name)
     write_data = write_wks.get_all_records(1)
@@ -82,25 +85,55 @@ def write_ranks(sheet_namee,formatted_rank_rows):
     ranks_write_df = pd.DataFrame(ranks_write_data)
     ranks_write_wks.append_rows(formatted_rank_rows)
 
+def get_offpage_links(sheet_name,month_row):
+    offpage_wks = sh.worksheet(sheet_name)
+    offpage_df = pd.DataFrame(offpage_wks.get_all_values())
+    offpage_df =offpage_df.iloc[month_row:,:]
+    offpage_df.drop(columns=[0,2,3,4,5],inplace=True)
+
+    offpage_df = offpage_df[offpage_df[6].str.startswith('htt',na=False)]
+
+    offpage_df.head(15)
+
+    formatted_offpage_rows = offpage_df.values.tolist()
+
+
+    return formatted_offpage_rows
+
+def write_offpage(sheet_name,formatted_offpage_rows):
+    sheet=sheet_name
+    of_wks = of_sh.worksheet(sheet)
+    of_wks.append_rows(formatted_offpage_rows)
+
+    
 
 
 
 
-# counting 
+
+#------#
+
+
+# counting & offpage links
 sheets=['Profile creation', 'Social bookmarking' , 'Image submission', 'Microblog submission', 'Article submission', 'Classified ads submission', 'Article Promotion', 'PDF submission', 'PPT submission', 'Blog Promotion']
 counts = {}
+
 for sheet_name in sheets:
-    counts[sheet_name] = int(counter(sheet_name))
-write('test2',counts)
+    try:
+        total_url, month_row = counter(sheet_name)
+        counts[sheet_name] = str(total_url)
+        write_offpage(sheet_name, get_offpage_links(sheet_name, month_row))
 
+    except ValueError:
+        print(f"No data for {sheet_name}, skipping offpage links...")
+
+
+
+# Write the final summary counts
+write_counter('test2', counts)
+    
 # Rankings
-write_ranks("test3",get_ranks("Updated 40 Keywords"))
-
-# Offpage links
-
-
-
-
+write_ranks("test3", get_ranks("Updated 40 Keywords"))
 
 
 
