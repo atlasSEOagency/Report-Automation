@@ -1,6 +1,7 @@
 name: Auto-SEO Monthly Report
 
 on:
+ 
   workflow_dispatch:
 
 jobs:

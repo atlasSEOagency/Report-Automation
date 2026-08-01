@@ -1,4 +1,5 @@
 from datetime import date
+from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 import os
 import pandas as pd 
 import gspread as gs
@@ -13,12 +14,16 @@ else:
     gc = gs.service_account_from_dict(json.loads(GCREDS))
 
 
-config_sh = gc.open('Auto-SEO Master Config')
-config_wks = config_sh.sheet1
+try:
+    config_sh = gc.open('Auto-SEO Master Config')
+    config_wks = config_sh.sheet1
+except SpreadsheetNotFound:
+    print("CRITICAL ERROR: Could not find the Google Sheet named 'Auto-SEO Master Config'. Check if it was renamed or deleted!")
+    exit(1)
 raw_config = config_wks.get_all_values()
-if len(raw_config) > 1:
-    headers = raw_config[0]
-    company_info = [dict(zip(headers, row)) for row in raw_config[1:]]
+if len(raw_config) > 2:
+    headers = raw_config[1]
+    company_info = [dict(zip(headers, row)) for row in raw_config[2:]]
 else:
     company_info = []
 
@@ -98,7 +103,11 @@ def get_offpage_links(sheet_name,month_row):
 def write_offpage(sheet_name,formatted_offpage_rows):
     sheet=sheet_name
     of_wks = of_sh.worksheet(sheet)
-    of_wks.append_rows(formatted_offpage_rows)
+    # Delete everything below row 3
+    if of_wks.row_count > 3:
+        of_wks.batch_clear([f'A4:Z{of_wks.row_count}'])
+    if formatted_offpage_rows:
+        of_wks.append_rows(formatted_offpage_rows)
 
 
 #-----------
@@ -110,9 +119,23 @@ for company in company_info:
             print(f"\n--- Processing {company['Company Name']} ---")
             
             # Reassign global sheets for this company
-            sh = gc.open(company["Active report"])
-            of_sh = gc.open(company["Offpage-links report"])
-            write_sh = gc.open(company["Looker-studio-sheet"])
+            try:
+                sh = gc.open(company["Active report"])
+            except SpreadsheetNotFound:
+                print(f"ERROR for {company['Company Name']}: Could not find '{company['Active report']}'. Check Master Config spelling & sharing permissions!")
+                continue
+            
+            try:
+                of_sh = gc.open(company["Offpage-links report"])
+            except SpreadsheetNotFound:
+                print(f"ERROR for {company['Company Name']}: Could not find '{company['Offpage-links report']}'. Check Master Config spelling & sharing permissions!")
+                continue
+            
+            try:
+                write_sh = gc.open(company["Looker-studio-sheet"])
+            except SpreadsheetNotFound:
+                print(f"ERROR for {company['Company Name']}: Could not find '{company['Looker-studio-sheet']}'. Check Master Config spelling & sharing permissions!")
+                continue
             
          
             summary_wks = write_sh.sheet1
@@ -141,15 +164,22 @@ for company in company_info:
                     write_offpage(sheet_name, get_offpage_links(sheet_name, month_row))
                 except ValueError:
                     print(f"No data for {sheet_name}, skipping offpage links...")
+                except WorksheetNotFound:
+                    print(f"ERROR: Missing Tab! Could not find the '{sheet_name}' tab. Did someone rename or delete it?")
                 
           
                 time.sleep(1.5)
 
            
-            write_counter('test2', counts)
+            try:
+                write_counter('Off-Page Work', counts)
+            except WorksheetNotFound:
+                print(f"ERROR: Missing Tab! Could not find the 'Off-Page Work' tab in the Looker Studio sheet.")
                 
-           
-            write_ranks("test3", get_ranks("Updated 40 Keywords"))
+            try:
+                write_ranks("Ranks", get_ranks("Updated 40 Keywords"))
+            except WorksheetNotFound:
+                print(f"ERROR: Missing Tab! Ensure 'Updated 40 Keywords' and 'Ranks' tabs exist and are spelled correctly.")
             
             print(f"Finished processing {company['Company Name']}!")
             
