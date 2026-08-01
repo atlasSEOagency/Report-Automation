@@ -65,6 +65,6 @@ If you want to test the script on your local machine:
 
 ## ⚠️ Important Notes & Troubleshooting
 
-- **Renaming Tabs**: The script currently expects specific tab names in your client sheets. For example, it searches for a tab named exactly **`Updated Keywords`** (or `Updated 40 Keywords` depending on your version) to pull ranks. If you rename these tabs in Google Sheets, the script will crash. You must update `main.py` to match the new tab names.
+- **Renaming Tabs**: The script currently expects specific tab names in your client sheets. For example, it searches for a tab named exactly **`Keywords`** to pull ranks. If you rename these tabs in Google Sheets, the script will crash. You must update `main.py` to match the new tab names.
 - **Missing Data**: If a client didn't do any "Blog Promotion" for a specific month, the script will gracefully print `"No data for Blog Promotion... Skipping"` and move on without crashing.
 - **Clearing Data**: The `write_offpage` function is hardcoded to clear data from **Row 4 downwards**. It assumes Rows 1, 2, and 3 contain permanent headers. Do not put data you wish to keep below Row 3.
