@@ -54,5 +54,5 @@ jobs:
       - name: Run Auto-SEO Script
         env:
           GCREDS: ${{ secrets.GCREDS }}
-          REPORT_MONTH: ${{ inputs.report_year }}-${{ inputs.report_month }}
+          REPORT_MONTH: ${{ inputs.report_month }}-${{ inputs.report_year }}
         run: python main.py

@@ -98,9 +98,9 @@ def main():
     explicit_month = None
     if report_month_str:
         try:
-            explicit_month = datetime.strptime(report_month_str, "%Y-%m").date()
+            explicit_month = datetime.strptime(report_month_str, "%m-%Y").date()
         except ValueError:
-            print(f"CRITICAL ERROR: Invalid REPORT_MONTH format '{report_month_str}'. Must be YYYY-MM.")
+            print(f"CRITICAL ERROR: Invalid REPORT_MONTH format '{report_month_str}'. Must be MM-YYYY.")
             sys.exit(1)
 
     gcreds = os.environ.get("GCREDS")
