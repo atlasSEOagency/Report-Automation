@@ -11,9 +11,7 @@ from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 from reporting import find_month_row, get_month_end_str, select_reporting_month
 
 
-def counter(sh, sheet_name, reporting_month):
-    wks = sh.worksheet(sheet_name)
-    raw_data = wks.get_all_values()
+def counter(raw_data, reporting_month):
     df = pd.DataFrame(raw_data)
 
     header_row = find_month_row(raw_data, reporting_month)
@@ -61,8 +59,8 @@ def write_ranks(write_sh, sheet_name, formatted_rows):
         write_sh.worksheet(sheet_name).append_rows(formatted_rows)
 
 
-def get_offpage_links(sh, sheet_name, data_start_row):
-    offpage_df = pd.DataFrame(sh.worksheet(sheet_name).get_all_values())
+def get_offpage_links(raw_data, data_start_row):
+    offpage_df = pd.DataFrame(raw_data)
     offpage_df = offpage_df.iloc[data_start_row:, :]
     offpage_df.drop(columns=[0, 2, 3, 4, 5], inplace=True)
     offpage_df = offpage_df[offpage_df[6].str.startswith("htt", na=False)]
@@ -128,9 +126,10 @@ def main():
             counts = {}
             for sheet_name in sheets:
                 try:
-                    total_url, data_start_row = counter(sh, sheet_name, reporting_month)
+                    raw_data = sh.worksheet(sheet_name).get_all_values()
+                    total_url, data_start_row = counter(raw_data, reporting_month)
                     counts[sheet_name] = str(total_url)
-                    write_offpage(of_sh, sheet_name, get_offpage_links(sh, sheet_name, data_start_row))
+                    write_offpage(of_sh, sheet_name, get_offpage_links(raw_data, data_start_row))
                 except ValueError:
                     print(f"No data for {sheet_name}, skipping offpage links...")
                 except WorksheetNotFound:
@@ -148,6 +147,7 @@ def main():
                 print("ERROR: Missing 'Keywords' or 'Ranks' tab.")
 
             print(f"Finished processing {company['Company Name']}!")
+            time.sleep(3)
         except Exception as error:
             print(f"Unexpected error processing {company.get('Company Name', 'Unknown')}: {error}")
             unexpected_errors += 1
