@@ -55,6 +55,10 @@ def open_sheet_with_retry(gc, title):
     return gc.open(title)
 
 @retry_quota_error()
+def get_worksheets_with_retry(sh):
+    return sh.worksheets()
+
+@retry_quota_error()
 def get_all_values_with_retry(worksheet):
     return worksheet.get_all_values()
 

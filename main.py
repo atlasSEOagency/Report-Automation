@@ -13,12 +13,21 @@ from retry_helper import (
     batch_clear_with_retry,
     col_values_with_retry,
     get_all_values_with_retry,
+    get_worksheets_with_retry,
     open_sheet_with_retry,
 )
 
+def get_cached_tab(tabs_dict, tab_name):
+    if tab_name not in tabs_dict:
+        raise WorksheetNotFound(tab_name)
+    return tabs_dict[tab_name]
+
+def normalize_row(row, min_length=7):
+    return row + [""] * max(0, min_length - len(row))
 
 def counter(raw_data, reporting_month):
-    df = pd.DataFrame(raw_data)
+    normalized_data = [normalize_row(row) for row in raw_data]
+    df = pd.DataFrame(normalized_data)
 
     header_row = find_month_row(raw_data, reporting_month)
     if header_row is None:
@@ -30,11 +39,10 @@ def counter(raw_data, reporting_month):
     return total_url, data_start_row
 
 
-def write_counter(write_sh, sheet_name, counts, reporting_month):
+def write_counter(write_wks, counts, reporting_month):
     if not counts:
         return
 
-    write_wks = write_sh.worksheet(sheet_name)
     rows_insert = [[], [], []]
     month_end_date = get_month_end_str(reporting_month)
     for key, value in counts.items():
@@ -45,8 +53,7 @@ def write_counter(write_sh, sheet_name, counts, reporting_month):
     write_wks.append_rows(list(map(list, zip(*rows_insert))))
 
 
-def get_ranks(sh, sheet_name, reporting_month):
-    rank_wks = sh.worksheet(sheet_name)
+def get_ranks(rank_wks, reporting_month):
     rank_df = pd.DataFrame(get_all_values_with_retry(rank_wks))
     rank_df = rank_df.iloc[3:-7].reset_index(drop=True)
     rank_df.drop(columns=0, inplace=True)
@@ -60,21 +67,21 @@ def get_ranks(sh, sheet_name, reporting_month):
     return formatted_rows
 
 
-def write_ranks(write_sh, sheet_name, formatted_rows):
+def write_ranks(rank_wks, formatted_rows):
     if formatted_rows:
-        write_sh.worksheet(sheet_name).append_rows(formatted_rows)
+        rank_wks.append_rows(formatted_rows)
 
 
 def get_offpage_links(raw_data, data_start_row):
-    offpage_df = pd.DataFrame(raw_data)
+    normalized_data = [normalize_row(row) for row in raw_data]
+    offpage_df = pd.DataFrame(normalized_data)
     offpage_df = offpage_df.iloc[data_start_row:, :]
     offpage_df.drop(columns=[0, 2, 3, 4, 5], inplace=True)
     offpage_df = offpage_df[offpage_df[6].str.startswith("htt", na=False)]
     return offpage_df.values.tolist()
 
 
-def write_offpage(of_sh, sheet_name, formatted_rows):
-    worksheet = of_sh.worksheet(sheet_name)
+def write_offpage(worksheet, formatted_rows):
     if worksheet.row_count > 3:
         batch_clear_with_retry(worksheet, [f"A4:Z{worksheet.row_count}"])
     if formatted_rows:
@@ -90,8 +97,8 @@ def main():
 
     try:
         config_sh = open_sheet_with_retry(gc, "Auto-SEO Master Config")
-        config_wks = config_sh.sheet1
-    except SpreadsheetNotFound:
+        config_wks = get_worksheets_with_retry(config_sh)[0]
+    except (SpreadsheetNotFound, IndexError):
         print("CRITICAL ERROR: Could not find 'Auto-SEO Master Config'.")
         sys.exit(1)
 
@@ -111,14 +118,24 @@ def main():
     for company in company_info:
         if str(company.get("Status", "")).strip().lower() != "active":
             continue
+        current_tab = "None"
+        current_op = "open_spreadsheet"
         try:
             print(f"\n--- Processing {company['Company Name']} ---")
             sh = open_sheet_with_retry(gc, company["Active report"])
             of_sh = open_sheet_with_retry(gc, company["Offpage-links report"])
             write_sh = open_sheet_with_retry(gc, company["Looker-studio-sheet"])
 
-            anchor_wks = sh.worksheet("Profile creation")
+            current_op = "get_worksheets"
+            source_tabs = {ws.title: ws for ws in get_worksheets_with_retry(sh)}
+            offpage_tabs = {ws.title: ws for ws in get_worksheets_with_retry(of_sh)}
+            output_tabs = {ws.title: ws for ws in get_worksheets_with_retry(write_sh)}
+
+            current_tab = "Profile creation"
+            current_op = "source.get_all_values"
+            anchor_wks = get_cached_tab(source_tabs, current_tab)
             anchor_values = get_all_values_with_retry(anchor_wks)
+
             try:
                 reporting_month = select_reporting_month(anchor_values, date.today())
             except ValueError as error:
@@ -128,23 +145,33 @@ def main():
             month_end_date = get_month_end_str(reporting_month)
             print(f"Selected reporting month ending: {month_end_date}")
 
-            summary_col_dates = col_values_with_retry(write_sh.sheet1, 1)
+            current_tab = "Summary (sheet1)"
+            current_op = "col_values_with_retry"
+            summary_wks = list(output_tabs.values())[0]
+            summary_col_dates = col_values_with_retry(summary_wks, 1)
+
             if month_end_date in [str(value).strip() for value in summary_col_dates]:
                 print(f"Report already generated for {company['Company Name']} for {month_end_date}. Skipping!")
                 continue
 
             counts = {}
             for sheet_name in sheets:
+                current_tab = sheet_name
                 try:
                     if sheet_name == "Profile creation":
                         raw_data = anchor_values
                     else:
-                        wks = sh.worksheet(sheet_name)
+                        current_op = "source.get_all_values"
+                        wks = get_cached_tab(source_tabs, sheet_name)
                         raw_data = get_all_values_with_retry(wks)
 
+                    current_op = "counter"
                     total_url, data_start_row = counter(raw_data, reporting_month)
                     counts[sheet_name] = str(total_url)
-                    write_offpage(of_sh, sheet_name, get_offpage_links(raw_data, data_start_row))
+
+                    current_op = "write_offpage"
+                    of_wks = get_cached_tab(offpage_tabs, sheet_name)
+                    write_offpage(of_wks, get_offpage_links(raw_data, data_start_row))
                 except ValueError:
                     print(f"No data for {sheet_name}, skipping offpage links...")
                 except WorksheetNotFound:
@@ -152,19 +179,30 @@ def main():
                 time.sleep(1.5)
 
             try:
-                write_counter(write_sh, "Off-Page Work", counts, reporting_month)
+                current_tab = "Off-Page Work"
+                current_op = "append_rows"
+                offpage_work_wks = get_cached_tab(output_tabs, current_tab)
+                write_counter(offpage_work_wks, counts, reporting_month)
             except WorksheetNotFound:
                 print("ERROR: Missing tab 'Off-Page Work'.")
 
             try:
-                write_ranks(write_sh, "Ranks", get_ranks(sh, "Keywords", reporting_month))
+                current_tab = "Ranks"
+                current_op = "source.get_all_values"
+                kw_wks = get_cached_tab(source_tabs, "Keywords")
+                rank_df = get_ranks(kw_wks, reporting_month)
+
+                current_op = "append_rows"
+                out_ranks_wks = get_cached_tab(output_tabs, current_tab)
+                write_ranks(out_ranks_wks, rank_df)
             except WorksheetNotFound:
                 print("ERROR: Missing 'Keywords' or 'Ranks' tab.")
 
             print(f"Finished processing {company['Company Name']}!")
             time.sleep(3)
         except Exception as error:
-            print(f"Unexpected error processing {company.get('Company Name', 'Unknown')}: {error}")
+            print(f"{company.get('Company Name', 'Unknown')} | tab={current_tab} | operation={current_op}")
+            print(f"Unexpected error: {error}")
             unexpected_errors += 1
 
     if unexpected_errors:
