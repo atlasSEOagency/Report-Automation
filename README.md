@@ -28,11 +28,13 @@ The `Auto-SEO Master Config` sheet uses row 2 for these headers:
 
 Rows with `Status` set to `Active` are processed.
 
-Each active report must contain the expected tabs, including `Profile creation`, the fixed month-selection anchor. If the anchor has no current or previous month, the company is skipped without writes.
+Each active report must contain the expected tabs, including `Profile creation`, the fixed month-selection anchor. In GitHub Actions, a missing requested month fails the workflow; local runs use the fallback behavior described below.
 
-## Monthly fallback
+## Month Selection
 
-The script checks `Profile creation` for the current month. On August 1, for example, it uses July when August data is missing. Output dates use the selected month’s true month-end date, such as `31/07/2026`.
+When running the script via GitHub Actions, you **must** explicitly select the `report_year` and `report_month` inputs from the dropdown menu (e.g., `2026` and `07`). The script will strictly process only the month you request. If the requested month is missing from the `Profile creation` tab, the workflow will explicitly fail.
+
+When running locally without the `REPORT_MONTH` environment variable, the script falls back to checking `Profile creation` for the current month. If the current month is missing (e.g., on August 1st before data is entered), it automatically falls back to July. Output dates use the selected month’s true month-end date, such as `31/07/2026`.
 
 ## Running
 
@@ -42,7 +44,7 @@ Run locally:
 python main.py
 ```
 
-Run from GitHub: open Actions, select the Auto-SEO workflow, and choose **Run workflow**.
+Run from GitHub: open Actions, select the Auto-SEO workflow, and choose **Run workflow**. You are required to select the target reporting year and month from the dropdowns (e.g., `2026` and `07`).
 
 ## Important notes
 

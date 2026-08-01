@@ -2,13 +2,18 @@ import json
 import os
 import sys
 import time
-from datetime import date
+from datetime import date, datetime
 
 import gspread as gs
 import pandas as pd
 from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 
-from reporting import find_month_row, get_month_end_str, select_reporting_month
+from reporting import (
+    ExplicitMonthMissingError,
+    find_month_row,
+    get_month_end_str,
+    select_reporting_month,
+)
 from retry_helper import (
     batch_clear_with_retry,
     col_values_with_retry,
@@ -89,6 +94,15 @@ def write_offpage(worksheet, formatted_rows):
 
 
 def main():
+    report_month_str = os.environ.get("REPORT_MONTH")
+    explicit_month = None
+    if report_month_str:
+        try:
+            explicit_month = datetime.strptime(report_month_str, "%Y-%m").date()
+        except ValueError:
+            print(f"CRITICAL ERROR: Invalid REPORT_MONTH format '{report_month_str}'. Must be YYYY-MM.")
+            sys.exit(1)
+
     gcreds = os.environ.get("GCREDS")
     if gcreds is None:
         gc = gs.service_account(".env/sound-repeater-373205-94c780c6a3b8.json")
@@ -137,13 +151,17 @@ def main():
             anchor_values = get_all_values_with_retry(anchor_wks)
 
             try:
-                reporting_month = select_reporting_month(anchor_values, date.today())
+                reporting_month = select_reporting_month(anchor_values, date.today(), explicit_month=explicit_month)
             except ValueError as error:
                 print(f"Skipping {company['Company Name']}: {error}")
                 continue
+            except ExplicitMonthMissingError as error:
+                print(f"ERROR: {company['Company Name']}: {error}")
+                unexpected_errors += 1
+                continue
 
+            print(f"Selected reporting month: {reporting_month.strftime('%B %Y')}")
             month_end_date = get_month_end_str(reporting_month)
-            print(f"Selected reporting month ending: {month_end_date}")
 
             current_tab = "Summary (sheet1)"
             current_op = "col_values_with_retry"

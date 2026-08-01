@@ -1,8 +1,35 @@
 name: Auto-SEO Monthly Report
 
 on:
- 
   workflow_dispatch:
+    inputs:
+      report_year:
+        description: 'Reporting Year'
+        type: choice
+        required: true
+        options:
+          - '2026'
+          - '2027'
+          - '2028'
+          - '2029'
+          - '2030'
+      report_month:
+        description: 'Reporting Month'
+        type: choice
+        required: true
+        options:
+          - '01'
+          - '02'
+          - '03'
+          - '04'
+          - '05'
+          - '06'
+          - '07'
+          - '08'
+          - '09'
+          - '10'
+          - '11'
+          - '12'
 
 jobs:
   run-report:
@@ -26,6 +53,6 @@ jobs:
 
       - name: Run Auto-SEO Script
         env:
-         
           GCREDS: ${{ secrets.GCREDS }}
+          REPORT_MONTH: ${{ inputs.report_year }}-${{ inputs.report_month }}
         run: python main.py

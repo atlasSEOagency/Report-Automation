@@ -11,9 +11,9 @@
 
 ## Month selection
 
-The script uses `Profile creation` as the month anchor. It selects the current month when that month exists. If the current month has no header, it selects the previous month. For example, a run on August 1 can produce a July report dated `31/07/2026`.
+When generating the report in GitHub Actions, you **must explicitly select the reporting year and month from the dropdown menus** (e.g., `2026` and `07`). The script will verify that exact month exists in `Profile creation`. If data for your requested month does not exist, the workflow will intentionally fail and alert you, preventing empty or inaccurate reports from being generated.
 
-If neither month exists, the script skips that company and writes nothing. It continues with other companies.
+*(Note for developers running the script locally without the month specified: it automatically falls back to checking the current month, and if empty, the previous month. If neither exists, it silently skips the company.)*
 
 ## Client setup
 
@@ -22,7 +22,7 @@ If neither month exists, the script skips that company and writes nothing. It co
 3. Share all three spreadsheets with the service account as an editor.
 4. Add the exact spreadsheet names to `Auto-SEO Master Config`.
 5. Set `Status` to `Active`.
-6. Run the GitHub Actions workflow.
+6. Run the GitHub Actions workflow and select the target reporting year and month from the dropdowns (e.g., `2026` and `07`).
 
 ## Troubleshooting
 
