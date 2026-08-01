@@ -1,187 +1,161 @@
-from datetime import date
-from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
-import os
-import pandas as pd 
-import gspread as gs
-import re
 import json
+import os
+import sys
 import time
+from datetime import date
 
-GCREDS = os.environ.get("GCREDS")
-if GCREDS == None:
-    gc = gs.service_account('.env/sound-repeater-373205-94c780c6a3b8.json')
-else:
-    gc = gs.service_account_from_dict(json.loads(GCREDS))
+import gspread as gs
+import pandas as pd
+from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
+
+from reporting import find_month_row, get_month_end_str, select_reporting_month
 
 
-try:
-    config_sh = gc.open('Auto-SEO Master Config')
-    config_wks = config_sh.sheet1
-except SpreadsheetNotFound:
-    print("CRITICAL ERROR: Could not find the Google Sheet named 'Auto-SEO Master Config'. Check if it was renamed or deleted!")
-    exit(1)
-raw_config = config_wks.get_all_values()
-if len(raw_config) > 2:
-    headers = raw_config[1]
-    company_info = [dict(zip(headers, row)) for row in raw_config[2:]]
-else:
-    company_info = []
-
-sh = None
-of_sh = None
-write_sh = None
-
-def counter(sheet_name):
+def counter(sh, sheet_name, reporting_month):
     wks = sh.worksheet(sheet_name)
     raw_data = wks.get_all_values()
     df = pd.DataFrame(raw_data)
 
-    now = date.today()
-    month_name = now.strftime('%B')
-    month_row = None
-    for x,val in enumerate(df[0]): 
-        if re.search(rf"0?{now.month}[./]{now.year}\b|{month_name}",str(val),re.IGNORECASE):
-            month_row = x+1
-            break         
-    month_data =df[6].iloc[month_row :]
-    total_url = month_data[month_data.str.startswith('htt',na=False)].count()
-    
-    if month_row is None:
+    header_row = find_month_row(raw_data, reporting_month)
+    if header_row is None:
         raise ValueError("No match")
 
-    return total_url,month_row
+    data_start_row = header_row + 1
+    month_data = df[6].iloc[data_start_row:]
+    total_url = month_data[month_data.str.startswith("htt", na=False)].count()
+    return total_url, data_start_row
 
-def write_counter(sheet_name,counts):
-    now = date.today()
+
+def write_counter(write_sh, sheet_name, counts, reporting_month):
+    if not counts:
+        return
+
     write_wks = write_sh.worksheet(sheet_name)
-    write_data = write_wks.get_all_records(1)
-    df2 = pd.DataFrame(write_data)
-    count_val = list(counts.values())
-    count_key = list(counts.keys())
-    rows_insert =[[],[],[]]
-    for x in range(len(counts)):
-        rows_insert[0].append(f"30/{now.month}/{now.year}")
-        rows_insert[2].append(count_val[x])
-        rows_insert[1].append(count_key[x])
+    rows_insert = [[], [], []]
+    month_end_date = get_month_end_str(reporting_month)
+    for key, value in counts.items():
+        rows_insert[0].append(month_end_date)
+        rows_insert[1].append(key)
+        rows_insert[2].append(value)
 
-    formatted_rows_to_insert = list(map(list, zip(*rows_insert)))
-    write_wks.append_rows(formatted_rows_to_insert)
+    write_wks.append_rows(list(map(list, zip(*rows_insert))))
 
-def get_ranks(sheet_name):
+
+def get_ranks(sh, sheet_name, reporting_month):
     rank_wks = sh.worksheet(sheet_name)
-    rank_data = rank_wks.get_all_values()
-    rank_df = pd.DataFrame(rank_data)
-    rank_df= rank_df.iloc[3:-7].reset_index(drop=True)
+    rank_df = pd.DataFrame(rank_wks.get_all_values())
+    rank_df = rank_df.iloc[3:-7].reset_index(drop=True)
     rank_df.drop(columns=0, inplace=True)
 
-    ranks =  rank_df.iloc[:, -4 : ]
-    keywords =  rank_df.iloc[:, : 2  ]
-    rank_df = pd.concat([keywords,ranks],axis=1)
-    now = date.today()
-    formatted_rank_rows = rank_df.values.tolist()
-    for x in range(len(formatted_rank_rows)):
-        if formatted_rank_rows[x][1] != "":
-            formatted_rank_rows[x].insert(0,f"{now.day}/{now.month}/{now.year}")
-    return formatted_rank_rows
-
-def write_ranks(sheet_namee,formatted_rank_rows):
-    ranks_write_wks = write_sh.worksheet(sheet_namee)
-    ranks_write_wks.append_rows(formatted_rank_rows)
-
-def get_offpage_links(sheet_name,month_row):
-    offpage_wks = sh.worksheet(sheet_name)
-    offpage_df = pd.DataFrame(offpage_wks.get_all_values())
-    offpage_df =offpage_df.iloc[month_row:,:]
-    offpage_df.drop(columns=[0,2,3,4,5],inplace=True)
-
-    offpage_df = offpage_df[offpage_df[6].str.startswith('htt',na=False)]
-    offpage_df.head(15)
-
-    formatted_offpage_rows = offpage_df.values.tolist()
-    return formatted_offpage_rows
-
-def write_offpage(sheet_name,formatted_offpage_rows):
-    sheet=sheet_name
-    of_wks = of_sh.worksheet(sheet)
-    # Delete everything below row 3
-    if of_wks.row_count > 3:
-        of_wks.batch_clear([f'A4:Z{of_wks.row_count}'])
-    if formatted_offpage_rows:
-        of_wks.append_rows(formatted_offpage_rows)
+    rank_df = pd.concat([rank_df.iloc[:, :2], rank_df.iloc[:, -4:]], axis=1)
+    formatted_rows = rank_df.values.tolist()
+    month_end_date = get_month_end_str(reporting_month)
+    for row in formatted_rows:
+        if row[1] != "":
+            row.insert(0, month_end_date)
+    return formatted_rows
 
 
-#-----------
+def write_ranks(write_sh, sheet_name, formatted_rows):
+    if formatted_rows:
+        write_sh.worksheet(sheet_name).append_rows(formatted_rows)
 
 
-for company in company_info:
+def get_offpage_links(sh, sheet_name, data_start_row):
+    offpage_df = pd.DataFrame(sh.worksheet(sheet_name).get_all_values())
+    offpage_df = offpage_df.iloc[data_start_row:, :]
+    offpage_df.drop(columns=[0, 2, 3, 4, 5], inplace=True)
+    offpage_df = offpage_df[offpage_df[6].str.startswith("htt", na=False)]
+    return offpage_df.values.tolist()
+
+
+def write_offpage(of_sh, sheet_name, formatted_rows):
+    worksheet = of_sh.worksheet(sheet_name)
+    if worksheet.row_count > 3:
+        worksheet.batch_clear([f"A4:Z{worksheet.row_count}"])
+    if formatted_rows:
+        worksheet.append_rows(formatted_rows)
+
+
+def main():
+    gcreds = os.environ.get("GCREDS")
+    if gcreds is None:
+        gc = gs.service_account(".env/sound-repeater-373205-94c780c6a3b8.json")
+    else:
+        gc = gs.service_account_from_dict(json.loads(gcreds))
+
     try:
-        if str(company.get("Status", "")).strip().lower() == "active":
+        config_wks = gc.open("Auto-SEO Master Config").sheet1
+    except SpreadsheetNotFound:
+        print("CRITICAL ERROR: Could not find 'Auto-SEO Master Config'.")
+        sys.exit(1)
+
+    raw_config = config_wks.get_all_values()
+    company_info = (
+        [dict(zip(raw_config[1], row)) for row in raw_config[2:]]
+        if len(raw_config) > 2
+        else []
+    )
+    unexpected_errors = 0
+    sheets = [
+        "Profile creation", "Social bookmarking", "Image submission",
+        "Microblog submission", "Article submission", "Classified ads submission",
+        "Article Promotion", "PDF submission", "PPT submission", "Blog Promotion",
+    ]
+
+    for company in company_info:
+        if str(company.get("Status", "")).strip().lower() != "active":
+            continue
+        try:
             print(f"\n--- Processing {company['Company Name']} ---")
-            
-            # Reassign global sheets for this company
+            sh = gc.open(company["Active report"])
+            of_sh = gc.open(company["Offpage-links report"])
+            write_sh = gc.open(company["Looker-studio-sheet"])
+
+            anchor_values = sh.worksheet("Profile creation").get_all_values()
             try:
-                sh = gc.open(company["Active report"])
-            except SpreadsheetNotFound:
-                print(f"ERROR for {company['Company Name']}: Could not find '{company['Active report']}'. Check Master Config spelling & sharing permissions!")
-                continue
-            
-            try:
-                of_sh = gc.open(company["Offpage-links report"])
-            except SpreadsheetNotFound:
-                print(f"ERROR for {company['Company Name']}: Could not find '{company['Offpage-links report']}'. Check Master Config spelling & sharing permissions!")
-                continue
-            
-            try:
-                write_sh = gc.open(company["Looker-studio-sheet"])
-            except SpreadsheetNotFound:
-                print(f"ERROR for {company['Company Name']}: Could not find '{company['Looker-studio-sheet']}'. Check Master Config spelling & sharing permissions!")
-                continue
-            
-         
-            summary_wks = write_sh.sheet1
-            existing_dates = summary_wks.col_values(1)
-            
-            now = date.today()
-            month_name = now.strftime('%B')
-            
-            already_run = False
-            for val in existing_dates:
-                if re.search(rf"0?{now.month}[./]{now.year}\b|{month_name}", str(val), re.IGNORECASE):
-                    already_run = True
-                    break
-                    
-            if already_run:
-                print(f"Report already generated for {company['Company Name']} this month. Skipping!")
+                reporting_month = select_reporting_month(anchor_values, date.today())
+            except ValueError as error:
+                print(f"Skipping {company['Company Name']}: {error}")
                 continue
 
-            sheets=['Profile creation', 'Social bookmarking' , 'Image submission', 'Microblog submission', 'Article submission', 'Classified ads submission', 'Article Promotion', 'PDF submission', 'PPT submission', 'Blog Promotion']
+            month_end_date = get_month_end_str(reporting_month)
+            print(f"Selected reporting month ending: {month_end_date}")
+            if month_end_date in [str(value).strip() for value in write_sh.sheet1.col_values(1)]:
+                print(f"Report already generated for {company['Company Name']} for {month_end_date}. Skipping!")
+                continue
+
             counts = {}
-
             for sheet_name in sheets:
                 try:
-                    total_url, month_row = counter(sheet_name)
+                    total_url, data_start_row = counter(sh, sheet_name, reporting_month)
                     counts[sheet_name] = str(total_url)
-                    write_offpage(sheet_name, get_offpage_links(sheet_name, month_row))
+                    write_offpage(of_sh, sheet_name, get_offpage_links(sh, sheet_name, data_start_row))
                 except ValueError:
                     print(f"No data for {sheet_name}, skipping offpage links...")
                 except WorksheetNotFound:
-                    print(f"ERROR: Missing Tab! Could not find the '{sheet_name}' tab. Did someone rename or delete it?")
-                
-          
+                    print(f"ERROR: Missing tab '{sheet_name}'.")
                 time.sleep(1.5)
 
-           
             try:
-                write_counter('Off-Page Work', counts)
+                write_counter(write_sh, "Off-Page Work", counts, reporting_month)
             except WorksheetNotFound:
-                print(f"ERROR: Missing Tab! Could not find the 'Off-Page Work' tab in the Looker Studio sheet.")
-                
+                print("ERROR: Missing tab 'Off-Page Work'.")
+
             try:
-                write_ranks("Ranks", get_ranks("Keywords"))
+                write_ranks(write_sh, "Ranks", get_ranks(sh, "Keywords", reporting_month))
             except WorksheetNotFound:
-                print(f"ERROR: Missing Tab! Ensure 'Keywords' and 'Ranks' tabs exist and are spelled correctly.")
-            
+                print("ERROR: Missing 'Keywords' or 'Ranks' tab.")
+
             print(f"Finished processing {company['Company Name']}!")
-            
-    except Exception as e:
-        print(f"Error processing {company.get('Company Name', 'Unknown')}: {e}")
+        except Exception as error:
+            print(f"Unexpected error processing {company.get('Company Name', 'Unknown')}: {error}")
+            unexpected_errors += 1
+
+    if unexpected_errors:
+        print(f"Completed with {unexpected_errors} unexpected errors.")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

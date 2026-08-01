@@ -1,70 +1,52 @@
 # Auto-SEO Reporting Automation
 
-This repository contains an automated Python application designed to process monthly Off-Page SEO reports, calculate submission metrics across multiple platforms, extract valid backlinks, and automatically push the summarized data into a Master Looker Studio Google Sheet.
+This Python application reads monthly off-page SEO data from Google Sheets and writes counts, backlinks, and keyword ranks to reporting sheets.
 
-It is built for **scale**, meaning you can manage an unlimited number of clients without ever touching the Python code.
+## Features
 
-## 🌟 Key Features
-- **Multi-Company Architecture**: Driven by a central "Master Config" Google Sheet. Add or remove clients by simply updating rows in the spreadsheet.
-- **Smart Data Wiping**: Automatically clears out previous month's link data (preserving your headers) before inserting the fresh batch of keywords.
-- **Duplicate Run Prevention**: Safely scans the Looker Studio summary sheet before processing. If a report for the current month has already been generated, it skips it to prevent duplicate data entries.
-- **API Rate-Limit Protection**: Intelligently pauses between Google Sheet API requests (`time.sleep`) to prevent hitting Google's `429 Quota Exceeded` errors.
-- **Semi-Automated Cloud Trigger**: Fully integrated with GitHub Actions. You can trigger the script on-demand straight from your browser.
+- Multi-company processing from `Auto-SEO Master Config`.
+- Current-month reporting with previous-month fallback when the current month is absent.
+- Backlink refresh from row 4 onward in off-page destination tabs.
+- Duplicate prevention using the selected month-end date.
+- GitHub Actions workflow with visible failures for unexpected errors.
 
----
+## Setup
 
-## ⚙️ Setup & Configuration
+Install dependencies:
 
-### 1. Service Account Credentials
-This script uses `gspread` to interact with Google Sheets. You must have a Google Cloud Service Account with the Google Sheets API enabled.
-- **Local Development**: Save your service account JSON file inside the `.env/` folder (this folder is ignored by git).
-- **GitHub Actions**: Copy the exact contents of your Service Account JSON file and add it as a Repository Secret in GitHub:
-  - Go to **Settings > Secrets and variables > Actions**
-  - Add a New Secret named `GCREDS`.
+```bash
+pip install -r requirements.txt
+```
 
-### 2. The "Master Config" Sheet
-The entire script is controlled by a Google Sheet named exactly: **`Auto-SEO Master Config`**.
-Ensure your service account email is invited as an Editor to this sheet.
+For local runs, place the service-account JSON at `.env/sound-repeater-373205-94c780c6a3b8.json`. For GitHub Actions, set the `GCREDS` repository secret.
 
-**Sheet Structure:**
-- **Row 1**: (Optional) Title / Instructions
-- **Row 2**: Exact Headers: `Company Name`, `Active report`, `Offpage-links report`, `Looker-studio-sheet`, `Status`
-- **Rows 3+**: Your client data. (If `Status` is set to `Active`, the script will process them).
+## Master Config
 
-### 3. Client Sheet Requirements
-For each client, the script expects 3 Google Sheets (defined in the Master Config):
-1. **Active report**: Contains tabs like `Profile creation`, `Social bookmarking`, etc.
-2. **Offpage-links report**: The script will clear everything below Row 3 on these tabs and paste the new links.
-3. **Looker-studio-sheet**: The destination for the final metric counts and Keyword Ranks.
+The `Auto-SEO Master Config` sheet uses row 2 for these headers:
 
----
+`Company Name`, `Active report`, `Offpage-links report`, `Looker-studio-sheet`, `Status`
 
-## 🚀 How to Run the Script
+Rows with `Status` set to `Active` are processed.
 
-### Option A: Running on GitHub Actions (Recommended)
-You do not need to use the terminal to run this script. Non-technical team members can execute it directly from GitHub:
-1. Go to the **Actions** tab in this GitHub repository.
-2. Click on the **Auto-SEO Processor** workflow on the left sidebar.
-3. Click the **Run workflow** dropdown button on the right side of the screen.
-4. Click **Run workflow** to start the process. 
-5. You can click into the job to watch the terminal logs in real-time.
+Each active report must contain the expected tabs, including `Profile creation`, the fixed month-selection anchor. If the anchor has no current or previous month, the company is skipped without writes.
 
-### Option B: Running Locally
-If you want to test the script on your local machine:
-1. Ensure you have Python installed.
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the script:
-   ```bash
-   python main.py
-   ```
+## Monthly fallback
 
----
+The script checks `Profile creation` for the current month. On August 1, for example, it uses July when August data is missing. Output dates use the selected month’s true month-end date, such as `31/07/2026`.
 
-## ⚠️ Important Notes & Troubleshooting
+## Running
 
-- **Renaming Tabs**: The script currently expects specific tab names in your client sheets. For example, it searches for a tab named exactly **`Keywords`** to pull ranks. If you rename these tabs in Google Sheets, the script will crash. You must update `main.py` to match the new tab names.
-- **Missing Data**: If a client didn't do any "Blog Promotion" for a specific month, the script will gracefully print `"No data for Blog Promotion... Skipping"` and move on without crashing.
-- **Clearing Data**: The `write_offpage` function is hardcoded to clear data from **Row 4 downwards**. It assumes Rows 1, 2, and 3 contain permanent headers. Do not put data you wish to keep below Row 3.
+Run locally:
+
+```bash
+python main.py
+```
+
+Run from GitHub: open Actions, select the Auto-SEO workflow, and choose **Run workflow**.
+
+## Important notes
+
+- Do not rename required tabs or change the Master Config headers.
+- Share every configured spreadsheet with the service account as an editor.
+- Rows 1–3 in off-page destination tabs contain permanent headers. The script clears data below row 3 before writing links.
+- Check the GitHub Actions log when a workflow fails. Unexpected errors return a non-zero exit code.
