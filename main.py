@@ -9,6 +9,12 @@ import pandas as pd
 from gspread.exceptions import SpreadsheetNotFound, WorksheetNotFound
 
 from reporting import find_month_row, get_month_end_str, select_reporting_month
+from retry_helper import (
+    batch_clear_with_retry,
+    col_values_with_retry,
+    get_all_values_with_retry,
+    open_sheet_with_retry,
+)
 
 
 def counter(raw_data, reporting_month):
@@ -41,7 +47,7 @@ def write_counter(write_sh, sheet_name, counts, reporting_month):
 
 def get_ranks(sh, sheet_name, reporting_month):
     rank_wks = sh.worksheet(sheet_name)
-    rank_df = pd.DataFrame(rank_wks.get_all_values())
+    rank_df = pd.DataFrame(get_all_values_with_retry(rank_wks))
     rank_df = rank_df.iloc[3:-7].reset_index(drop=True)
     rank_df.drop(columns=0, inplace=True)
 
@@ -70,7 +76,7 @@ def get_offpage_links(raw_data, data_start_row):
 def write_offpage(of_sh, sheet_name, formatted_rows):
     worksheet = of_sh.worksheet(sheet_name)
     if worksheet.row_count > 3:
-        worksheet.batch_clear([f"A4:Z{worksheet.row_count}"])
+        batch_clear_with_retry(worksheet, [f"A4:Z{worksheet.row_count}"])
     if formatted_rows:
         worksheet.append_rows(formatted_rows)
 
@@ -83,12 +89,13 @@ def main():
         gc = gs.service_account_from_dict(json.loads(gcreds))
 
     try:
-        config_wks = gc.open("Auto-SEO Master Config").sheet1
+        config_sh = open_sheet_with_retry(gc, "Auto-SEO Master Config")
+        config_wks = config_sh.sheet1
     except SpreadsheetNotFound:
         print("CRITICAL ERROR: Could not find 'Auto-SEO Master Config'.")
         sys.exit(1)
 
-    raw_config = config_wks.get_all_values()
+    raw_config = get_all_values_with_retry(config_wks)
     company_info = (
         [dict(zip(raw_config[1], row)) for row in raw_config[2:]]
         if len(raw_config) > 2
@@ -106,11 +113,12 @@ def main():
             continue
         try:
             print(f"\n--- Processing {company['Company Name']} ---")
-            sh = gc.open(company["Active report"])
-            of_sh = gc.open(company["Offpage-links report"])
-            write_sh = gc.open(company["Looker-studio-sheet"])
+            sh = open_sheet_with_retry(gc, company["Active report"])
+            of_sh = open_sheet_with_retry(gc, company["Offpage-links report"])
+            write_sh = open_sheet_with_retry(gc, company["Looker-studio-sheet"])
 
-            anchor_values = sh.worksheet("Profile creation").get_all_values()
+            anchor_wks = sh.worksheet("Profile creation")
+            anchor_values = get_all_values_with_retry(anchor_wks)
             try:
                 reporting_month = select_reporting_month(anchor_values, date.today())
             except ValueError as error:
@@ -119,14 +127,21 @@ def main():
 
             month_end_date = get_month_end_str(reporting_month)
             print(f"Selected reporting month ending: {month_end_date}")
-            if month_end_date in [str(value).strip() for value in write_sh.sheet1.col_values(1)]:
+
+            summary_col_dates = col_values_with_retry(write_sh.sheet1, 1)
+            if month_end_date in [str(value).strip() for value in summary_col_dates]:
                 print(f"Report already generated for {company['Company Name']} for {month_end_date}. Skipping!")
                 continue
 
             counts = {}
             for sheet_name in sheets:
                 try:
-                    raw_data = sh.worksheet(sheet_name).get_all_values()
+                    if sheet_name == "Profile creation":
+                        raw_data = anchor_values
+                    else:
+                        wks = sh.worksheet(sheet_name)
+                        raw_data = get_all_values_with_retry(wks)
+
                     total_url, data_start_row = counter(raw_data, reporting_month)
                     counts[sheet_name] = str(total_url)
                     write_offpage(of_sh, sheet_name, get_offpage_links(raw_data, data_start_row))
