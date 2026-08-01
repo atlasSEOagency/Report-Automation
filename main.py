@@ -177,9 +177,9 @@ for company in company_info:
                 print(f"ERROR: Missing Tab! Could not find the 'Off-Page Work' tab in the Looker Studio sheet.")
                 
             try:
-                write_ranks("Ranks", get_ranks("Updated 40 Keywords"))
+                write_ranks("Ranks", get_ranks("Keywords"))
             except WorksheetNotFound:
-                print(f"ERROR: Missing Tab! Ensure 'Updated 40 Keywords' and 'Ranks' tabs exist and are spelled correctly.")
+                print(f"ERROR: Missing Tab! Ensure 'Keywords' and 'Ranks' tabs exist and are spelled correctly.")
             
             print(f"Finished processing {company['Company Name']}!")
             
