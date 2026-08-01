@@ -105,7 +105,7 @@ def main():
 
     gcreds = os.environ.get("GCREDS")
     if gcreds is None:
-        gc = gs.service_account(".env/sound-repeater-373205-94c780c6a3b8.json")
+        gc = gs.service_account(".env/auto-report-504013-af953f806f88.json")
     else:
         gc = gs.service_account_from_dict(json.loads(gcreds))
 

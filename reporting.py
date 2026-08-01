@@ -17,13 +17,17 @@ def find_month_row(values: list[list[str]], target_month: date) -> int | None:
     """Return the zero-based row containing the target month and year."""
     month_name = target_month.strftime("%B")
     pattern = (
-        rf"\b0?{target_month.month}[./]{target_month.year}\b|"
-        rf"\b{month_name}\s+{target_month.year}\b"
+        rf"\b0?{target_month.month}[./-]{target_month.year}\b|"
+        rf"\b{month_name}\s+{target_month.year}\b|"
+        rf"\b{month_name}\b.*backlink|"
+        rf"^\s*{month_name}\s*$"
     )
 
     for index, row in enumerate(values):
-        if row and re.search(pattern, str(row[0]), re.IGNORECASE):
-            return index
+        if row:
+            row_str = " ".join(str(cell) for cell in row[:3])
+            if re.search(pattern, row_str, re.IGNORECASE):
+                return index
     return None
 
 
