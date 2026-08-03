@@ -87,8 +87,6 @@ def get_offpage_links(raw_data, data_start_row):
 
 
 def write_offpage(worksheet, formatted_rows):
-    if worksheet.row_count > 3:
-        batch_clear_with_retry(worksheet, [f"A4:Z{worksheet.row_count}"])
     if formatted_rows:
         worksheet.append_rows(formatted_rows)
 
@@ -171,6 +169,15 @@ def main():
             if month_end_date in [str(value).strip() for value in summary_col_dates]:
                 print(f"Report already generated for {company['Company Name']} for {month_end_date}. Skipping!")
                 continue
+
+            print("Clearing old data from all offpage tabs...")
+            for sheet_name in sheets:
+                if sheet_name in offpage_tabs:
+                    of_wks = offpage_tabs[sheet_name]
+                    current_tab = sheet_name
+                    current_op = "batch_clear"
+                    if of_wks.row_count > 3:
+                        batch_clear_with_retry(of_wks, [f"A4:Z{of_wks.row_count}"])
 
             counts = {}
             for sheet_name in sheets:
