@@ -9,11 +9,13 @@
 4. Use standard dates in the `Off-Page Work` date column.
 5. Do not run the workflow while someone is editing the destination sheets.
 
-## Month selection
+## Month and Cycle selection
 
-When generating the report in GitHub Actions, you **must explicitly select the reporting year and month from the dropdown menus** (e.g., `2026` and `07`). The script will verify that exact month exists in `Profile creation`. If data for your requested month does not exist, the workflow will intentionally fail and alert you, preventing empty or inaccurate reports from being generated.
+When generating the report in GitHub Actions, you **must explicitly select the reporting year, month, and reporting cycle from the dropdown menus** (e.g., `2026`, `07`, and `15-15`).
 
-*(Note for developers running the script locally without the month specified: it automatically falls back to checking the current month, and if empty, the previous month. If neither exists, it silently skips the company.)*
+- The script will strictly process only the month and cycle you request.
+- If data for your requested month does not exist, the workflow will intentionally fail and alert you, preventing empty or inaccurate reports from being generated.
+- Source sheets may use full dates (e.g. `16/07/2026`) or month/day labels (e.g. `July 16`). Each date label applies to the URL rows below it until the next date label. Malformed dates or URL rows with no preceding date will fail that company.
 
 ## Client setup
 
@@ -22,7 +24,7 @@ When generating the report in GitHub Actions, you **must explicitly select the r
 3. Share all three spreadsheets with the service account as an editor.
 4. Add the exact spreadsheet names to `Auto-SEO Master Config`.
 5. Set `Status` to `Active`.
-6. Run the GitHub Actions workflow and select the target reporting year and month from the dropdowns (e.g., `2026` and `07`).
+6. Run the GitHub Actions workflow and select the target reporting year, month, and cycle from the dropdowns.
 
 ## Troubleshooting
 

@@ -30,6 +30,14 @@ on:
           - '10'
           - '11'
           - '12'
+      cycle_type:
+        description: 'Reporting Cycle'
+        type: choice
+        required: true
+        options:
+          - 'All'
+          - '1-1'
+          - '15-15'
 
 jobs:
   run-report:
@@ -54,5 +62,6 @@ jobs:
       - name: Run Auto-SEO Script
         env:
           GCREDS: ${{ secrets.GCREDS }}
-          REPORT_MONTH: ${{ inputs.report_month }}-${{ inputs.report_year }}
+          REPORT_MONTH: ${{ inputs.report_year }}-${{ inputs.report_month }}
+          REPORT_CYCLE: ${{ inputs.cycle_type }}
         run: python main.py

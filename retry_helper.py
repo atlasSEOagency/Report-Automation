@@ -68,4 +68,9 @@ def col_values_with_retry(worksheet, col):
 
 @retry_quota_error()
 def batch_clear_with_retry(worksheet, ranges):
+    time.sleep(1.5)
     return worksheet.batch_clear(ranges)
+
+def paced_append_rows(worksheet, rows):
+    time.sleep(1.5)
+    return worksheet.append_rows(rows)

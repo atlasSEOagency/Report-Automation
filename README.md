@@ -30,21 +30,31 @@ Rows with `Status` set to `Active` are processed.
 
 Each active report must contain the expected tabs, including `Profile creation`, the fixed month-selection anchor. In GitHub Actions, a missing requested month fails the workflow; local runs use the fallback behavior described below.
 
-## Month Selection
+## Reporting Month & Cycle
 
-When running the script via GitHub Actions, you **must** explicitly select the `report_year` and `report_month` inputs from the dropdown menu (e.g., `2026` and `07`). The script will strictly process only the month you request. If the requested month is missing from the `Profile creation` tab, the workflow will explicitly fail.
+When running the script, you **must** supply both `REPORT_MONTH` and `REPORT_CYCLE` environment variables.
 
-When running locally without the `REPORT_MONTH` environment variable, the script falls back to checking `Profile creation` for the current month. If the current month is missing (e.g., on August 1st before data is entered), it automatically falls back to July. Output dates use the selected month’s true month-end date, such as `31/07/2026`.
+- **`REPORT_MONTH`**: Must strictly be in `YYYY-MM` format (e.g., `2026-08`).
+- **`REPORT_CYCLE`**: Must strictly be `All`, `1-1`, or `15-15`.
+
+The script processes companies based on the `REPORT_CYCLE`:
+- **`All`**: Processes both `client info 1-1` and `client info 15-15` tabs from the Master Config.
+- **`1-1`**: Processes only the `client info 1-1` tab. Uses a standard month boundaries (day 1 to month-end).
+- **`15-15`**: Processes only the `client info 15-15` tab. Uses boundaries from the 15th of the previous month to the 15th of the selected month (e.g. `15/07/2026` to `15/08/2026`).
+
+Date rows may use full dates (e.g. `16/07/2026`) or month/day labels used by the source sheets (e.g. `July 16`). A date label applies to following URL rows until the next date label. The selected reporting window still resolves the year and applies inclusive boundaries. A URL row with a malformed date or no preceding date fails the company.
 
 ## Running
 
 Run locally:
 
 ```bash
+export REPORT_MONTH=2026-08
+export REPORT_CYCLE=15-15
 python main.py
 ```
 
-Run from GitHub: open Actions, select the Auto-SEO workflow, and choose **Run workflow**. You are required to select the target reporting year and month from the dropdowns (e.g., `2026` and `07`).
+Run from GitHub: open Actions, select the Auto-SEO workflow, and choose **Run workflow**. You are required to select the target reporting year, month, and reporting cycle from the dropdowns.
 
 ## Important notes
 
