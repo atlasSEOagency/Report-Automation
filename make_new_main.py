@@ -1,4 +1,6 @@
-import json
+import os
+
+new_code = '''import json
 import os
 import sys
 import time
@@ -38,9 +40,9 @@ MONTH_NAMES = {
 def get_cached_tab(tab_dict, title):
     if title in tab_dict:
         return tab_dict[title]
-    target = re.sub(r"\s+", "", title).lower()
+    target = re.sub(r"\\s+", "", title).lower()
     for sheet_title, ws in tab_dict.items():
-        current = re.sub(r"\s+", "", sheet_title).lower()
+        current = re.sub(r"\\s+", "", sheet_title).lower()
         if current == target:
             return ws
     raise WorksheetNotFound(f"Worksheet {title} not found")
@@ -49,18 +51,18 @@ def parse_strict_date(date_str: str) -> date:
     text = str(date_str).strip() if date_str is not None else ""
     if not text:
         raise ValueError("Empty date")
-    year_match = re.search(r"\b20\d{2}\b", text)
+    year_match = re.search(r"\\b20\\d{2}\\b", text)
     if not year_match:
         raise ValueError(f"Date missing year: {date_str}")
     without_year = text[:year_match.start()] + " " + text[year_match.end():]
     has_month_name = re.search(
-        r"\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
+        r"\\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|"
         r"jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|"
-        r"nov(?:ember)?|dec(?:ember)?)\b",
+        r"nov(?:ember)?|dec(?:ember)?)\\b",
         without_year,
         re.IGNORECASE,
     )
-    numeric_parts = [int(value) for value in re.findall(r"\b\d{1,2}\b", without_year)]
+    numeric_parts = [int(value) for value in re.findall(r"\\b\\d{1,2}\\b", without_year)]
     if (has_month_name and not any(1 <= value <= 31 for value in numeric_parts)) or (
         not has_month_name and len(numeric_parts) < 2
     ):
@@ -75,8 +77,8 @@ def parse_partial_date(date_str: str, start_date: date, end_date: date) -> date 
     text = str(date_str).strip()
     month_pattern = "|".join(MONTH_NAMES)
     match = re.fullmatch(
-        rf"(?i)(?:(?P<month>{month_pattern})\s+(?P<day>\d{{1,2}})|"
-        rf"(?P<day2>\d{{1,2}})\s+(?P<month2>{month_pattern}))"
+        rf"(?i)(?:(?P<month>{month_pattern})\\s+(?P<day>\\d{{1,2}})|"
+        rf"(?P<day2>\\d{{1,2}})\\s+(?P<month2>{month_pattern}))"
         rf"(?:st|nd|rd|th)?",
         text,
     )
@@ -110,7 +112,7 @@ def resolve_row_date(date_str: str, start_date: date, end_date: date) -> date | 
         partial = parse_partial_date(text, start_date, end_date)
         if partial is not None:
             return partial
-        if re.search(r"\b20\d{2}\b", text):
+        if re.search(r"\\b20\\d{2}\\b", text):
             raise full_error
         return None
 
@@ -155,7 +157,7 @@ def format_ranks_rows(rank_wks, month_end_date_str):
     if rank_df.empty or len(rank_df.columns) < 3:
         return []
     rank_df = rank_df.iloc[3:].copy()
-    rank_df = rank_df[rank_df[0].astype(str).str.fullmatch(r"\d+")]
+    rank_df = rank_df[rank_df[0].astype(str).str.fullmatch(r"\\d+")]
     rank_df = rank_df.reset_index(drop=True)
     if rank_df.empty:
         return []
@@ -195,7 +197,7 @@ def main():
     dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
     run_id = os.environ.get("GITHUB_RUN_ID", "local")
 
-    if not report_month_str or not re.match(r"^\d{4}-\d{2}$", report_month_str):
+    if not report_month_str or not re.match(r"^\\d{4}-\\d{2}$", report_month_str):
         print(f"CRITICAL ERROR: Invalid or missing REPORT_MONTH: '{report_month_str}'. Must be YYYY-MM.")
         sys.exit(1)
 
@@ -320,7 +322,7 @@ def main():
                 traceback.print_exc()
                 unexpected_errors += 1
 
-    print("\n=== PHASE 2: EXECUTION & RECOVERY ===")
+    print("\\n=== PHASE 2: EXECUTION & RECOVERY ===")
     for payload in validated_payloads:
         company_name = payload["company_name"]
         ledger_key = payload["ledger_key"]
@@ -406,10 +408,15 @@ def main():
             unexpected_errors += 1
 
     if unexpected_errors:
-        print(f"\nCompleted with {unexpected_errors} unexpected errors.")
+        print(f"\\nCompleted with {unexpected_errors} unexpected errors.")
         sys.exit(1)
     else:
-        print(f"\nAll processing completed successfully!")
+        print(f"\\nAll processing completed successfully!")
 
 if __name__ == "__main__":
     main()
+'''
+
+with open("/Volumes/disk_2/program/Auto-Seo/new_main.py", "w") as f:
+    f.write(new_code)
+print("new_main.py written.")

@@ -2,9 +2,21 @@ import time
 from functools import wraps
 from gspread.exceptions import APIError
 
+class RateLimiter:
+    def __init__(self, delay=1.5):
+        self.delay = delay
+        self.last_call = 0.0
+
+    def wait(self):
+        now = time.monotonic()
+        elapsed = now - self.last_call
+        if elapsed < self.delay:
+            time.sleep(self.delay - elapsed)
+        self.last_call = time.monotonic()
+
+limiter = RateLimiter(1.5)
+
 def is_quota_error(error: APIError) -> bool:
-    """Check if the given APIError is a quota or rate-limit error."""
-    # APIError wraps the requests.Response
     try:
         err_json = error.response.json()
         status_code = error.response.status_code
@@ -18,21 +30,16 @@ def is_quota_error(error: APIError) -> bool:
                     return True
     except Exception:
         pass
-
     return False
 
 def retry_quota_error(sleep_func=time.sleep):
-    """
-    Decorator that catches gspread API quota errors and retries with exponential backoff.
-    Retries up to 3 times (4 total attempts) with delays of 10s, 20s, 40s.
-    """
     delays = [10, 20, 40]
-
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             attempts = 0
             while True:
+                limiter.wait()
                 try:
                     return func(*args, **kwargs)
                 except APIError as e:
@@ -68,9 +75,13 @@ def col_values_with_retry(worksheet, col):
 
 @retry_quota_error()
 def batch_clear_with_retry(worksheet, ranges):
-    time.sleep(1.5)
     return worksheet.batch_clear(ranges)
 
+# No retry decorator for mutating append_rows! Just pace it.
 def paced_append_rows(worksheet, rows):
-    time.sleep(1.5)
+    limiter.wait()
     return worksheet.append_rows(rows)
+
+def paced_update(worksheet, range_name, values):
+    limiter.wait()
+    return worksheet.update(range_name, values)
