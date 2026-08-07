@@ -8,7 +8,7 @@ class RunLedger:
     def __init__(self, gc: gspread.Client):
         self.gc = gc
         self.sh = open_sheet_with_retry(gc, "Auto-SEO Master Config")
-        self.tab_name = "Run Ledger"
+        self.tab_name = "Run Logs"
         self.headers = ["Key", "Status", "Started At", "Completed At", "Error", "GitHub Run ID"]
         try:
             self.wks = self.sh.worksheet(self.tab_name)
@@ -41,6 +41,10 @@ class RunLedger:
                 return dict(zip(headers, padded_row))
         return None
 
+    def _find_next_empty_row(self):
+        data = self._get_all()
+        return len(data) + 1
+
     def log_start(self, key, run_id):
         if self.dry_run:
             print(f"[DRY RUN] Ledger: log_start({key}, {run_id})")
@@ -53,7 +57,8 @@ class RunLedger:
         if row_idx:
             paced_update(self.wks, f"A{row_idx}:F{row_idx}", [new_row])
         else:
-            paced_append_rows(self.wks, [new_row])
+            next_idx = self._find_next_empty_row()
+            paced_update(self.wks, f"A{next_idx}:F{next_idx}", [new_row])
 
     def log_success(self, key):
         if self.dry_run:

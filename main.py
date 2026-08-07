@@ -287,7 +287,7 @@ def main():
                             raw_data = get_all_values_with_retry(wks)
 
                         count, valid_rows = counter(raw_data, start_date, end_date)
-                        counts[sheet_name] = str(count)
+                        counts[sheet_name] = count
                         offpage_data[sheet_name] = format_offpage_links(valid_rows)
                     except WorksheetNotFound:
                         pass # Tab missing in source, skip
