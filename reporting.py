@@ -17,7 +17,7 @@ def get_month_end_str(target_date: date) -> str:
 
 def get_reporting_window(report_month: date, cycle_type: str) -> tuple[date, date]:
     if cycle_type == "15-15":
-        start_date = (report_month.replace(day=1) - timedelta(days=1)).replace(day=15)
+        start_date = (report_month.replace(day=1) - timedelta(days=1)).replace(day=16)
         end_date = report_month.replace(day=15)
         return start_date, end_date
     elif cycle_type == "1-1":
